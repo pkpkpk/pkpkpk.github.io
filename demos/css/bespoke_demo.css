@@ -1,0 +1,104 @@
+body{
+  color:white;
+  background-color: #0d0d0d ;
+  height: 100vh;
+  margin:0px;
+  padding:0px;
+  width: 544px;
+  margin: 15px auto;
+  font-family: Helvetica,Arial;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1 {
+  color: palegreen;
+  font: 200 2em 'monospace';
+}
+
+
+button {
+  margin-left: 10px;
+  background-color: palegreen;
+  color:black
+}
+
+table {
+  border-collapse: collapse;
+  border: 2px solid rgb(200,200,200);
+  letter-spacing: 1px;
+  font-size: 1.0rem;
+}
+td, th {
+  border: 1px solid rgb(190,190,190);
+  padding: 10px 20px;
+}
+
+.resrc{
+  display:block;
+  position:absolute;
+  width:100%;
+  height:100%;
+  box-sizing: border-box;
+  -webkit-transform-origin: center center;
+     -moz-transform-origin: center center;
+          transform-origin: center center;
+  -webkit-backface-visibility: hidden;
+     -moz-backface-visibility: hidden;
+          backface-visibility: hidden;
+  -webkit-transform-style: preserve-3d;
+     -moz-transform-style: preserve-3d;
+          transform-style: preserve-3d;
+  pointer-events:auto;
+}
+
+.bracket0 {color: palegreen;}
+.bracket1 {color: #70BFFF;}
+.bracket2 {color: #887FD5;}
+.bracket3 {color: #EB77EC;}
+.bracket4 {color: #FFBB44;}
+.bracket5 {color: #EFEF66;}
+.bracket6 {color: #63EB63;}
+.bracket7 {color: #55F1E1;}
+.bracket8 {color: #70BFFF;}
+.bracket9 {color: #887FD5;}
+.bracket10 {color: #EB77EC;}
+.bracket11 {color: #FFBB44;}
+.bracket12 {color: #EFEF66;}
+.bracket11 {color: #63EB63;}
+.bracket12 {color: #55F1E1;}
+.bracket13 {color: palegreen;}
+.bracket14 {color: #70BFFF; }
+.bracket15 {color: #887FD5;}
+.bracket16 {color: #EB77EC;}
+.bracket17 {color: #FFBB44;}
+.bracket18 {color: #EFEF66;}
+.bracket19 {color: #63EB63;}
+.bracket20 {color: #55F1E1;}
+.bracket21 {color: #70BFFF;}
+.bracket22 {color: #887FD5;}
+.bracket23 {color: #EB77EC;}
+.bracket24 {color: #FFBB44;}
+.bracket25 {color: #EFEF66;}
+.bracket26 {color: #63EB63;}
+.bracket27 {color: #55F1E1;}
+
+.blink_me {
+  animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+  50% { opacity: 0; }
+}
+
+.hidden-input {
+  padding: 0;
+  border: 0;
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  width: 1px;
+}
