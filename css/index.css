@@ -1,0 +1,44 @@
+body{
+  background-color: #0d0d0d;
+}
+
+h1 {
+  color: palegreen;
+  font: 200 2em 'monospace';
+}
+
+ul.index * {
+  font-size :16pt;
+  font-family: monospace;
+  list-style : none;
+  color: palegreen;
+  text-decoration: none;
+}
+
+.index li {
+  margin-top: 20px;
+}
+
+.index li a {
+  text-decoration: none;
+}
+
+.index li:hover {
+  color: yellow;
+}
+
+.index li:hover * {
+  color: yellow;
+}
+
+.index li:before {
+  float: left;
+  content: "[ ]";
+  margin-right: 10px;
+}
+
+.index li:hover::before {
+  float: left;
+  content: "[\25a0]";
+  margin-right: 10px;
+}

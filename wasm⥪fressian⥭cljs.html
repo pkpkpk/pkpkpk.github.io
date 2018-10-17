@@ -1,0 +1,147 @@
+<html><head><meta http-equiv="Content-Type" content="text/html" charSet="UTF-8" lang="en"/><meta name="viewport" content="width=640"/><link href="css/post.css" rel="stylesheet" type="text/css"/><title>/wasm⥪fressian⥭cljs</title></head><body><div><div><div class="post"><h1><div class="home"><a href="/">..</a>/wasm⥪fressian⥭cljs</div></h1><span class="date">2018_10_17</span><div><p>In Nov 2017 support for compiling <a href="https://github.com/rust-lang/rust/pull/46115">directly to wasm</a> landed in <a href="https://www.rust-lang.org/en-US/">Rust</a>. Afterwards there was a window, before <a href="https://github.com/rustwasm/wasm-bindgen">wasm-bindgen</a> was thing, where it was simultaneously very easy to compile wasm but very hard to use with javascript: <a href="https://developer.mozilla.org/en-US/docs/WebAssembly">WebAssembly</a> functions can only return numbers that fit inside a double to their javascript callers, and any other exchange of information must be done via shared access to the module’s <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WebAssembly/Memory">memory</a>. This means reading and writing binary data and swapping pointers back and forth between javascript and rust ffi style.</p>
+
+<p>So I wondered, did clojure offer a solution for this?</p>
+
+<h3 id="fressian">Fressian</h3>
+
+<p><a href="https://github.com/clojure/data.fressian">Fressian</a> is a self-describing binary format designed by <a href="https://twitter.com/richhickey">Rich Hickey</a>. As you would expect from the Clojure team, Fressian is highly dynamic and easily extended.</p>
+
+<!-- As you would expect from the Clojure team, Fressian is highly dynamic and easily extended. Values are read off as they as encoded and there's no real restriction on what can be thrown in there. There are details around its use, but enlightenment is cheap: It's just sexps with bytes. There is a byte identifying a type, and based on that byte, the reader knows what to do with subsequent bytes. The length of bytes that need to be read is either specific to that identifying byte, or it is explicitly encoded in the data. -->
+
+<p>In short, the Fressian data model includes all the standard clojure primitives and generic sequential and map-like collections. Users can easily use these primitives to extend Fressian with their own types and handle them using their own read and write handlers. You can read the official documentation <a href="https://github.com/Datomic/fressian/wiki/Rationale">here</a>, and <a href="https://twitter.com/stuarthalloway">Stuart Halloway</a> gave a talk about Fressian that you can watch <a href="https://www.youtube.com/watch?v=JArZqMqsaB0">here</a>.</p>
+
+<hr />
+
+<p>So… Fressian is flexible and dynamic… words that have <strong><em>never ever</em></strong> been used to describe Rust. Assuming we can implement <a href="https://github.com/pkpkpk/fress">fressian in clojurescript</a>, how can we get those dynamic values to play nicely with the strongly typed and infamously restrictive rustlang?</p>
+
+<hr />
+
+<h3 id="serde">Serde</h3>
+
+<p><a href="https://github.com/serde-rs/serde">Serde</a> is a data serialization framework for rust authored by <a href="https://twitter.com/davidtolnay">David Tolnay</a>. <em>Framework</em> is the operative word here: Serde doesn’t know anything about your actual format. It is up to implementers to rig up their own parsers and serializers into Serde’s <a href="https://serde.rs/data-model.html">data model</a>. The <a href="https://serde.rs/impl-deserialize.html"><code>Deserialize</code></a> trait lets types pull the data they need from deserializers in a format agnostic way. The <a href="https://serde.rs/impl-serialize.html"><code>Serialize</code></a> trait lets types write data in a format agnostic way. I highly recommend reading the <a href="https://serde.rs/">serde docs</a> and playing with <a href="https://github.com/serde-rs/json">serde-json</a> if you need something more concrete and familiar than fressian.</p>
+
+<p>There is good news though: <span class="magic">Serde is magic</span>. It is so magical that you can take the serializer for one format, rig it up to the deserializer for another format, and you get a <a href="https://serde.rs/transcode.html">transcoder for free</a>. Yeah! And it’s <strong>fast</strong>… all these traits are tucked away at compile time and the only dispatch is introduced by implementation authors.</p>
+
+<p>Serde is <strong><em>spectacularly easy</em></strong> for end users to consume. Converting Fressian bytes into Rust data structures is literally a one-liner.</p>
+
+<h3 id="serde-fressian">serde-fressian</h3>
+
+<p><a href="https://github.com/pkpkpk/serde-fressian">Serde-fressian</a> is an implementation of Fressian, in Rust, using Serde. <a href="https://github.com/pkpkpk/fress">Fress</a> is a Fressian implementation for clojurescript. Together, they can seamlessly exchange values between WebAssembly modules and Clojurescript.</p>
+
+<p>The <a href="https://github.com/pkpkpk/serde-fressian/blob/master/src/wasm/mod.rs"><code>serde_fressian::wasm</code></a> module is designed to interface with the <a href="https://github.com/pkpkpk/fress/blob/master/src/main/cljs/fress/wasm.cljs"><code>fress.wasm</code></a> namespace. From cljs, all you really need is one function: <a href="https://github.com/pkpkpk/fress/blob/806f2c565fd4286b083ea2d0ab3ba9d5793441fd/src/main/cljs/fress/wasm.cljs#L31"><code>fress.wasm/call</code></a> takes any fressianable object (or none), writes it into wasm memory, and hands of those bytes to an <a href="https://developer.mozilla.org/en-US/docs/WebAssembly/Exported_functions">exported wasm function</a>. The wasm function then does its thing. If it returns a pointer, <code>fress.wasm/call</code> will take it and read a value from it.</p>
+
+<p>Rust…</p>
+
+<pre>
+use serde_fressian::error::{Error as FressError};
+use serde_fressian::value::{Value};
+use serde_fressian::wasm::{self};
+
+#[no_mangle]
+pub extern "C" fn echo(ptr: *mut u8, len: usize) -&gt; *mut u8
+{
+    let res: Result&lt;Value, FressError&gt; = wasm::from_ptr(ptr, len);
+
+    wasm::fress_dealloc(ptr, len);
+
+    wasm::to_js(res)
+}
+</pre>
+
+<p>CLJS…</p>
+
+<pre>
+(require '[fress.wasm])
+
+(def module (atom nil))
+
+(defn init-module [buffer]
+  (.then (fress.wasm/instantiate buffer)
+    (fn [Mod] (reset! module Mod))
+    (fn [err] (handle-err err))))
+
+(defn echo [any]
+  (if-let [Mod @module]
+    (fress.wasm/call Mod "echo" any)
+    (throw (js/Error "missing module"))))
+
+(assert (= (echo "hello world!") [nil "hello world!"]))
+</pre>
+
+<p>The details of this interaction are walked through in detail <a href="https://github.com/pkpkpk/fress/blob/master/doc/wasm-guide/1_the_result.md">here</a>.</p>
+
+<p>You can take things for a spin with the <a href="https://github.com/pkpkpk/fressian-wasm-quick-start">fressian-wasm-quick-start</a>.</p>
+
+<h4 id="wait-what-about-those-dynamic-types">Wait, what about those dynamic types?</h4>
+
+<p>Just as described for <a href="https://github.com/serde-rs/json">serde-json</a>, serde-fressian supports both <em>‘weakly typed deserialization’</em> and <em>‘strongly typed deserialization’</em>.</p>
+
+<h4 id="weakly-typed-deserialization">weakly typed deserialization</h4>
+<p>This is where we let a self-describing format drive deserialization. We accomplish this with <code>serde_fressian::value::Value</code>, an enum that can handle any fressian type you throw at it. <code>Value</code>’s <code>Deserialize</code> impl will just read values off as they come, storing them in a giant recursive enum. Want to give rust a map where the keys are all different types, some even themselves maps? Go for it. It may not make any sense to stuff like that, but the point is you can. If you don’t know what you are being given, deserializing to <code>Value</code> will give you something to work with.</p>
+
+<h4 id="strongly-typed-deserialization">strongly typed deserialization</h4>
+<p>This is where you know the content encoded in the bytes. This time, Fressian’s self-describing nature is incidental. Using the same interface, you can send more specific types, and serde doesn’t care as long as the bytes are valid.</p>
+
+<pre>
+let res: Result&lt;Vec&lt;String&gt;, FressError&gt; = wasm::from_ptr(ptr, len);
+</pre>
+
+<p>Want to send a vector of strings from clojurescript? Serde-fressian can pick it up as <code>Vec&lt;String&gt;</code> seamlessly.</p>
+
+<h3 id="whats-the-catch">What’s the catch?</h3>
+
+<p>There are 2:</p>
+<ul>
+<li>If you want to accept values from cljs, you must make sure your rust interfaces accept strictly <code>(ptr: *mut u8, len: usize)</code> to be deserialized by <code>wasm::from_ptr</code>.</li>
+
+<li>If you want send values to cljs, you must return <code>*mut u8</code> via <code>wasm::to_js</code>.</li>
+</ul>
+
+<p>Deserializing with <code>wasm::from_ptr</code> only borrows the bytes it is given. You could also take ownership of them via a vec and deserialize with <code>serde_fressian::de::from_vec</code>. Your rust function is responsible for dealing with those bytes in a way that makes sense for what you are trying to do. This isn’t really a catch as much as it is a feature. Setting up those interfaces and reasoning about ownership of the byte slices is really all the interop overhead there is.</p>
+
+<h3 id="wasm-bindgen">Wasm-Bindgen</h3>
+
+<p><a href="https://github.com/rustwasm/wasm-bindgen">Wasm-bindgen</a> solves the interface problem by creating an <a href="https://github.com/dtolnay/quote">AST</a> and using it to generate both wrapper rust functions that produce the necessary pointers, and typescript functions to interop with them. It will also automatically handle js function imports.</p>
+
+<p>It should be possible to do this for fressian. We can use the same AST technique to generate similar rust wrappers, and then hand off a json description of the signatures to clojure for generating functions or namespaces. Is it worth going the whole way and defining concrete type signatures? I don’t know, you might as well use wasm-bindgen at that point (and tbf maybe you should anyway), but certainly things can be easier.</p>
+
+<p>In the long term, all of this may not matter. Wasm engines are being developed <a href="https://v8.dev/blog/v8-release-70">faster than you think</a>, and it wouldn’t be surprising to see threads, native javascript values, and DOM apis landing in browsers in the next couple of years, rendering all this stuff moot.</p>
+
+<p>Regardless, Wasm-Bindgen really has a lot to offer, at cost of some extra build time, and well, typescript. The <a href="https://github.com/rustwasm">rust-wasm team</a> is very friendly and has all kinds of tools in development, including a <a href="https://github.com/rustwasm/wasm-pack">packaging solution</a>. You should also check out their <a href="https://rustwasm.github.io/wasm-bindgen/">book</a>.</p>
+
+<h3 id="one-does-not-simply-write-rust">👌 One does not simply ‘write rust’</h3>
+
+<p>If this is your first brush with Rust, or you’ve had a bad go of it already, please do yourself the favor of doing your homework:</p>
+
+<ol>
+  <li><a href="https://doc.rust-lang.org/book/">TRPL</a></li>
+  <li><a href="https://doc.rust-lang.org/rust-by-example/">Rust By Example</a></li>
+  <li><a href="https://www.amazon.com/Programming-Rust-Fast-Systems-Development/dp/1491927283">Programming Rust</a></li>
+</ol>
+
+<p>Rust is different, and if you bash at like you would a more familiar language, you will get frustrated quickly. Most friction surrounds getting function interfaces to agree with the ‘ownership’ needs of the data you are trying to work with. Probably more than half of the time I have spent with Rust has been just refactoring things so that signatures agree. Once you get your data though, operating on it is a breeze. Rust has expressions, pattern matching, closures, and a wonderful iterator system. It all feels succinct, natural, and <em>fast</em>.</p>
+
+<p>Trust the compiler to put you on the right track. I think Rust’s difficulty is oversold simply because the compiler is so <strong>vocal and smart</strong> in comparison to other languages. Rustc is an angry pedant and it is going to yell at you all the time… and it will be right to do so. Make peace with it and converse like you would a repl. Give it a fair shot and do your reading. You can do it.</p>
+
+<h3 id="or-webassembly">…or WebAssembly</h3>
+<p>So Fressian makes value exchange pretty easy, and consequently, development is smoother. What it does not do, however, is make writing wasm functions automatically worthwhile.</p>
+
+<p>There are many examples out there of successfully compiling game engines to wasm, but if you are a webdev don’t succumb to FOMO quite yet. Bashing pixel buffers and handing off views on memory is a simpler exchange vs. say, allocating collections of JS strings from serialized bytes. There is a fixed cost to reading bytes and turning them into Javascript values, and it is non-trivial to find performance margins that justify that cost.</p>
+
+<p>You really need a problem complex enough where you can accept the handicap and let rust’s fine grain memory control gain ground and overcome javascript engines. Earlier this year there was a very <a href="https://hacks.mozilla.org/2018/01/oxidizing-source-maps-with-rust-and-webassembly/">interesting</a> <a href="https://mrale.ph/blog/2018/02/03/maybe-you-dont-need-rust-to-speed-up-your-js.html">back</a> and <a href="http://fitzgeraldnick.com/2018/02/26/speed-without-wizardry.html">forth</a> between <a href="https://twitter.com/fitzgen">@fitzgen</a> and <a href="https://twitter.com/mraleph">@mraleph</a> about moving Mozilla’s source-map parsing from JavaScript into WebAssembly. If you are looking for performance, it’s an enlightening read.</p>
+
+<h3 id="whats-next">What’s next</h3>
+
+<p>✨✨✨ <strong><em>I want a wasm pretty printer and I want it yesterday.</em></strong> ✨✨✨</p>
+
+<p>To get there we need patterns for persisting state that unlock rust’s finer capabilities. Serde-Fressian is still pretty naive: serializing strings and bytes involves copying them, when really it should be possible to skip the copy and serialize pointers themselves for javascript to read from. If you understand Rust’s ownership rules, then you can anticipate that doing this requires data to survive the function that serializes it. This means global state and maybe a compiler flag.</p>
+
+<p>Fress is also a little fat and slow. There is unnecessary dispatch, and some well placed compiler constants could allow large swaths of undesired fressian type support to be excised from advanced builds. For example, if you know you’ll never use chunked strings or bytes, you shouldn’t have to ship the associated handlers. Maybe it should even be re-written in js similar to transit.</p>
+
+<p>And finally, documentation &amp; tutorials. This is alot I know, but there’s cool stuff on the way.</p>
+
+<p><a href="https://twitter.com/idiotslowdown">HMU</a> \m/</p>
+
+<p>– Thanks to <a href="https://twitter.com/doxosophoi">John Newman</a> and <a href="https://twitter.com/stuarthalloway">Stuart Halloway</a> for reading drafts of this post.</p>
+
+</div></div></div></div></body></html>

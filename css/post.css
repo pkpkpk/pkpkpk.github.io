@@ -1,0 +1,75 @@
+h1 {
+  color: palegreen;
+  font: 200 2em 'monospace';
+  /* margin: 2.5em 0 0.5em;  */
+}
+
+h3 {
+  text-decoration: underline;
+}
+
+body{
+  background-color: #0d0d0d;
+  margin: 50px auto;
+  color: white;
+}
+
+.home > a {
+  text-decoration: none;
+}
+
+.home a:hover  {
+  color: yellow;
+}
+
+.home a:hover *  {
+  color: yellow;
+}
+
+.post {
+  /* thanks nikita i dont know shit */
+  width: 544px; margin: 15px auto;
+  font-family: Helvetica,Arial;
+}
+
+a {
+  color: palegreen;
+}
+
+a < code {
+  color: #9898fb;
+
+}
+
+a:hover {
+  color: yellow;
+}
+
+a:hover > * {
+  color: yellow;
+}
+
+.date {
+  font-size: 1.2em;
+  color: palegreen;
+}
+
+pre {
+  color: #b6b6fc;
+  padding: 3px;
+  font-family: monospace;
+}
+
+code {
+  color: #b6b6fc;
+  font-family: monospace;
+  text-decoration: none;
+}
+
+hr {
+  width: 80%;
+}
+
+.magic {
+  color: #fb98fb;
+}
